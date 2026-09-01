@@ -2,6 +2,8 @@ extends Node2D
 
 const BOARD_SIZE := 8
 const TILE_SIZE := 80
+var highlighted_squares: Array[Node] = []
+var selected_piece: Node = null
 
 @onready var SquareScene := preload("res://Square.tscn")
 @onready var PieceScene := preload("res://Piece.tscn")
@@ -28,6 +30,17 @@ func _create_board():
 
 			add_child(square)
 
+func _clear_highlights():
+	for sq in highlighted_squares:
+		if is_instance_valid(sq):
+			sq.set_highlight(false)
+	highlighted_squares.clear()
+func _get_square_at(pos: Vector2i) -> Node:
+	for child in get_children():
+		if child is Node2D and child.has_method("set_highlight"):
+			if child.board_pos == pos:
+				return child
+	return null
 
 func _spawn_pieces():
 	# مهره‌های سفید
