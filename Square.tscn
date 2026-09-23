@@ -1,12 +1,17 @@
 [gd_scene format=3 uid="uid://b420ev7g3hqr2"]
 
-[ext_resource type="Script" uid="uid://0e2flblvqhij" path="res://square.gd" id="1_1dlly"]
+[ext_resource type="Script" uid="uid://0e2flblvqhij" path="res://square.gd" id="1_y4sij"]
 
-[node name="Node2D" type="Node2D" unique_id=942681710]
-script = ExtResource("1_1dlly")
+[sub_resource type="RectangleShape2D" id="RectangleShape2D_x6dff"]
 
-[node name="ColorRect" type="ColorRect" parent="." unique_id=806896674]
-offset_right = 80.0
-offset_bottom = 80.0
+[node name="Area2D" type="Area2D" unique_id=18632753]
+script = ExtResource("1_y4sij")
+
+[node name="ColorRect" type="ColorRect" parent="." unique_id=1932821174]
+offset_right = 40.0
+offset_bottom = 40.0
+mouse_filter = 2
 mouse_default_cursor_shape = 2
-color = Color(0, 1, 1, 1)
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="." unique_id=1653728921]
+shape = SubResource("RectangleShape2D_x6dff")

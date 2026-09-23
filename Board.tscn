@@ -1,6 +1,22 @@
 [gd_scene format=3 uid="uid://cvsiw72ajx1ej"]
 
 [ext_resource type="Script" uid="uid://cnn0ljy5bu2tt" path="res://board.gd" id="1_nd4as"]
+[ext_resource type="Shader" uid="uid://elgv23345j55" path="res://arcylic-bg.gdshader" id="2_3ng4l"]
+
+[sub_resource type="ShaderMaterial" id="ShaderMaterial_x6dff"]
+shader = ExtResource("2_3ng4l")
+shader_parameter/base_color = Color(0.09, 0.11, 0.16, 0.85)
+shader_parameter/noise_strength = 0.08
+shader_parameter/glow_intensity = 0.25
+shader_parameter/light_position = Vector2(0.3, 0.2)
 
 [node name="Node2D" type="Node2D" unique_id=1175915630]
 script = ExtResource("1_nd4as")
+
+[node name="ColorRect" type="ColorRect" parent="." unique_id=2099254669]
+material = SubResource("ShaderMaterial_x6dff")
+offset_left = -398.0
+offset_top = -29.0
+offset_right = 841.0
+offset_bottom = 648.0
+color = Color(0.98039216, 0, 0.98039216, 0.20784314)

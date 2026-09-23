@@ -1,22 +1,23 @@
-extends Node2D
-
-@export var board_pos: Vector2i
+extends Area2D
 
 signal square_clicked(pos: Vector2i)
 
-@onready var color_rect := $ColorRect
-
-var base_color: Color
-var highlight_color: Color = Color(1, 1, 0, 0.6) # زرد شفاف
-var is_highlighted: bool = false
+var board_pos: Vector2i
+var base_color: Color = Color.WHITE
 
 func _ready():
-	base_color = color_rect.color
+	$ColorRect.size = Vector2(50, 50)
+	$ColorRect.position = Vector2.ZERO
+	update_color()
 
-func set_highlight(on: bool):
-	is_highlighted = on
-	color_rect.color = highlight_color if on else base_color
+func update_color():
+	$ColorRect.color = base_color
+
+func set_highlight(active: bool):
+	modulate = Color.YELLOW if active else Color.WHITE
+	if not active:
+		update_color()
 
 func _input_event(viewport, event, shape_idx):
 	if event is InputEventMouseButton and event.pressed and event.button_index == MOUSE_BUTTON_LEFT:
-		emit_signal("square_clicked", board_pos)
+		square_clicked.emit(board_pos)
