@@ -2,43 +2,53 @@ extends Node2D
 
 const TILE_SIZE = 50
 const BOARD_SIZE = 8
-
 var SquareScene = preload("res://Square.tscn")
 var PieceScene = preload("res://Piece.tscn")
-
 var squares: Dictionary = {}
 var pieces: Dictionary = {}
 var highlighted_squares: Array = []
-
 var camera: Camera2D
 var selected_piece: Node = null
+var current_turn: String = "white"
 
 const Z_SQUARES = 0
 const Z_PIECES = 10
-const Z_HIGHLIGHT = 5
 
-# ─── CHESS BOARD COLORS (Classic) ───
-const COLOR_LIGHT = Color("#EEEED2")  # Creamy white
-const COLOR_DARK = Color("#769656")   # Classic green
-const COLOR_HIGHLIGHT = Color.YELLOW
-const COLOR_VALID_MOVE = Color(0.3, 0.8, 0.3, 0.5)  # Semi-transparent green
-const COLOR_SELECTED = Color(0.9, 0.7, 0.2, 0.6)    # Golden
+const COLOR_LIGHT = Color("#EEEED2")
+const COLOR_DARK = Color("#769656")
+const COLOR_VALID_MOVE = Color(0.3, 0.8, 0.3, 0.6)
+const COLOR_SELECTED = Color(1.0, 0.8, 0.0, 0.7)
 
 func _ready():
 	_create_board()
 	_spawn_pieces()
 	_setup_camera()
-	_draw_board_border()
+
+# ================= مهم‌ترین تغییر: کلیک اینجا مدیریت می‌شود =================
+func _input(event: InputEvent) -> void:
+	if event is InputEventMouseButton \
+			and event.button_index == MOUSE_BUTTON_LEFT \
+			and event.pressed:
+		var pos = _pixel_to_board(get_global_mouse_position())
+		if pos != Vector2i(-1, -1):
+			_on_square_clicked(pos)
+			get_viewport().set_input_as_handled()
+
+func _pixel_to_board(world_pos: Vector2) -> Vector2i:
+	var x = int(floor(world_pos.x / TILE_SIZE))
+	var y = int(floor(world_pos.y / TILE_SIZE))
+	if x < 0 or x >= BOARD_SIZE or y < 0 or y >= BOARD_SIZE:
+		return Vector2i(-1, -1)
+	return Vector2i(x, y)
+# ============================================================================
 
 func _setup_camera():
 	camera = Camera2D.new()
 	camera.name = "Camera2D"
 	add_child(camera)
 	camera.make_current()
-	
 	var board_size = BOARD_SIZE * TILE_SIZE
 	camera.global_position = Vector2(board_size / 2.0, board_size / 2.0)
-	
 	update_camera_zoom()
 	get_tree().root.size_changed.connect(_on_viewport_resized)
 
@@ -49,78 +59,31 @@ func _on_viewport_resized():
 func update_camera_zoom():
 	var board_size = BOARD_SIZE * TILE_SIZE
 	var viewport_size = get_viewport().get_visible_rect().size
-	
 	var zoom_x = viewport_size.x / board_size
 	var zoom_y = viewport_size.y / board_size
-	var zoom = min(zoom_x, zoom_y) * 0.92  # Slightly more padding
-	
+	var zoom = min(zoom_x, zoom_y) * 0.92
 	camera.zoom = Vector2(zoom, zoom)
 
 func _create_board():
 	for y in range(BOARD_SIZE):
 		for x in range(BOARD_SIZE):
 			var square = SquareScene.instantiate()
-			
-			# Position at TOP-LEFT of tile (not centered)
-			# This assumes your Square scene has its origin at top-left
 			square.position = Vector2(x * TILE_SIZE, y * TILE_SIZE)
 			square.board_pos = Vector2i(x, y)
 			square.z_index = Z_SQUARES
 			square.z_as_relative = false
-			
-			# Classic chess coloring: a1 is dark
 			var is_light = (x + y) % 2 == 0
 			square.base_color = COLOR_LIGHT if is_light else COLOR_DARK
-			
-			# IMPORTANT: Make sure square size matches TILE_SIZE exactly
-			# If your Square uses ColorRect, set its size to TILE_SIZE x TILE_SIZE
-			# If it uses Sprite2D, scale it so the texture fills TILE_SIZE
-			
-			if square.has_signal("square_clicked"):
-				square.square_clicked.connect(_on_square_clicked)
-			
+			# اتصال سیگنال حذف شد — کلیک‌ها حالا در _input مدیریت می‌شوند
 			add_child(square)
 			squares[Vector2i(x, y)] = square
-
-func _draw_board_border():
-	# Draw a subtle border around the entire board
-	var border = Line2D.new()
-	border.width = 3
-	border.default_color = Color("#4A4A4A")
-	
-	var board_px = BOARD_SIZE * TILE_SIZE
-	var points = [
-		Vector2(-2, -2),
-		Vector2(board_px + 2, -2),
-		Vector2(board_px + 2, board_px + 2),
-		Vector2(-2, board_px + 2),
-		Vector2(-2, -2)
-	]
-	border.points = points
-	border.z_index = -1
-	add_child(border)
-	
-	# Optional: Add a subtle shadow
-	var shadow = Polygon2D.new()
-	shadow.color = Color(0, 0, 0, 0.15)
-	shadow.polygon = [
-		Vector2(4, board_px + 4),
-		Vector2(board_px + 6, board_px + 4),
-		Vector2(board_px + 8, board_px + 8),
-		Vector2(6, board_px + 8)
-	]
-	shadow.z_index = -2
-	add_child(shadow)
 
 func _clear_highlights():
 	for sq in highlighted_squares:
 		if is_instance_valid(sq):
-			sq.set_highlight(false)
-			# Reset to base color
-			var pos = sq.board_pos
-			var is_light = (pos.x + pos.y) % 2 == 0
-			sq.modulate = Color.WHITE
-			sq.base_color = COLOR_LIGHT if is_light else COLOR_DARK
+			if sq.has_method("set_highlight"):
+				sq.set_highlight(false)
+			sq.modulate = Color.WHITE  # ریست تینتِ رنگ
 	highlighted_squares.clear()
 
 func _get_square_at(pos: Vector2i) -> Node:
@@ -130,54 +93,45 @@ func _get_piece_at(pos: Vector2i) -> Node:
 	return pieces.get(pos, null)
 
 func _spawn_pieces():
-	# White pieces (rows 6-7, bottom of board)
 	for x in range(8):
 		_create_piece("pawn", "white", Vector2i(x, 6))
-	
-	_create_piece("rook",   "white", Vector2i(0, 7))
+	_create_piece("rook", "white", Vector2i(0, 7))
 	_create_piece("knight", "white", Vector2i(1, 7))
 	_create_piece("bishop", "white", Vector2i(2, 7))
-	_create_piece("queen",  "white", Vector2i(3, 7))
-	_create_piece("king",   "white", Vector2i(4, 7))
+	_create_piece("queen", "white", Vector2i(3, 7))
+	_create_piece("king", "white", Vector2i(4, 7))
 	_create_piece("bishop", "white", Vector2i(5, 7))
 	_create_piece("knight", "white", Vector2i(6, 7))
-	_create_piece("rook",   "white", Vector2i(7, 7))
+	_create_piece("rook", "white", Vector2i(7, 7))
 	
-	# Black pieces (rows 0-1, top of board)
 	for x in range(8):
 		_create_piece("pawn", "black", Vector2i(x, 1))
-	
-	_create_piece("rook",   "black", Vector2i(0, 0))
+	_create_piece("rook", "black", Vector2i(0, 0))
 	_create_piece("knight", "black", Vector2i(1, 0))
 	_create_piece("bishop", "black", Vector2i(2, 0))
-	_create_piece("queen",  "black", Vector2i(3, 0))
-	_create_piece("king",   "black", Vector2i(4, 0))
+	_create_piece("queen", "black", Vector2i(3, 0))
+	_create_piece("king", "black", Vector2i(4, 0))
 	_create_piece("bishop", "black", Vector2i(5, 0))
 	_create_piece("knight", "black", Vector2i(6, 0))
-	_create_piece("rook",   "black", Vector2i(7, 0))
+	_create_piece("rook", "black", Vector2i(7, 0))
 
 func _create_piece(type: String, color: String, pos: Vector2i):
 	var piece = PieceScene.instantiate()
 	piece.piece_type = type
 	piece.piece_color = color
-	
-	# ─── FIX: Bigger pieces ───
-	# Adjust based on your Piece scene's original size
-	# If your piece texture is ~100x100, scale 0.45 fills the tile nicely
 	piece.scale = Vector2(0.45, 0.45)
-	
 	piece.z_index = Z_PIECES
 	piece.z_as_relative = false
-	
-	# Center piece on the tile
+	# جلوگیری از بلعیدن کلیک‌ها توسط مهره‌ها
+	if piece is CollisionObject2D:
+		piece.input_pickable = false
 	piece.position = Vector2(
 		pos.x * TILE_SIZE + TILE_SIZE / 2.0,
 		pos.y * TILE_SIZE + TILE_SIZE / 2.0
 	)
-	
 	pieces[pos] = piece
 	piece.set_meta("board_pos", pos)
-	
+	piece.set_meta("has_moved", false)
 	add_child(piece)
 
 func _move_piece(from_pos: Vector2i, to_pos: Vector2i) -> bool:
@@ -193,79 +147,140 @@ func _move_piece(from_pos: Vector2i, to_pos: Vector2i) -> bool:
 	pieces.erase(from_pos)
 	pieces[to_pos] = piece
 	piece.set_meta("board_pos", to_pos)
+	piece.set_meta("has_moved", true)
 	
 	var target_pos = Vector2(
 		to_pos.x * TILE_SIZE + TILE_SIZE / 2.0,
 		to_pos.y * TILE_SIZE + TILE_SIZE / 2.0
 	)
-	
 	var tween = create_tween()
 	tween.set_ease(Tween.EASE_OUT)
 	tween.set_trans(Tween.TRANS_QUAD)
 	tween.tween_property(piece, "position", target_pos, 0.2)
 	
+	current_turn = "black" if current_turn == "white" else "white"
+	print("Turn changed to:", current_turn)
 	return true
 
 func _on_square_clicked(pos: Vector2i):
-	print("Clicked:", pos)
-	
+	print("Clicked:", pos, "Turn:", current_turn)
 	var clicked_piece = _get_piece_at(pos)
 	
-	# Deselect if clicking same piece
-	if selected_piece != null and clicked_piece == selected_piece:
-		_clear_highlights()
-		selected_piece = null
-		return
-	
-	# Move to empty square
-	if selected_piece != null and clicked_piece == null:
+	if selected_piece != null:
 		var from_pos = selected_piece.get_meta("board_pos")
-		_move_piece(from_pos, pos)
-		_clear_highlights()
-		selected_piece = null
-		return
-	
-	# Capture enemy piece
-	if selected_piece != null and clicked_piece != null:
-		if clicked_piece.piece_color != selected_piece.piece_color:
-			var from_pos = selected_piece.get_meta("board_pos")
+		var valid_moves = _get_valid_moves(from_pos)
+		
+		if pos in valid_moves:
 			_move_piece(from_pos, pos)
-		_clear_highlights()
-		selected_piece = null
-		return
+			_clear_highlights()
+			selected_piece = null
+			return
+		else:
+			_clear_highlights()
+			selected_piece = null
 	
-	# Select a piece
-	if clicked_piece != null:
+	if clicked_piece != null and clicked_piece.piece_color == current_turn:
 		_clear_highlights()
 		selected_piece = clicked_piece
-		
 		var sq = _get_square_at(pos)
 		if sq:
 			sq.modulate = COLOR_SELECTED
 			highlighted_squares.append(sq)
-		
 		_highlight_valid_moves(pos)
-	else:
-		_clear_highlights()
-		selected_piece = null
+		return
+	
+	_clear_highlights()
+	selected_piece = null
 
 func _highlight_valid_moves(pos: Vector2i):
 	var piece = _get_piece_at(pos)
 	if piece == null:
 		return
+	var valid_moves = _get_valid_moves(pos)
+	for move_pos in valid_moves:
+		var sq = _get_square_at(move_pos)
+		if sq:
+			sq.modulate = COLOR_VALID_MOVE
+			highlighted_squares.append(sq)
+
+func _get_valid_moves(pos: Vector2i) -> Array[Vector2i]:
+	var piece = _get_piece_at(pos)
+	if piece == null:
+		return []
+	var color = piece.piece_color
+	var type = piece.piece_type
+	match type:
+		"pawn":   return _get_pawn_moves(pos, color)
+		"rook":   return _get_sliding_moves(pos, color, [[1,0],[-1,0],[0,1],[0,-1]])
+		"knight": return _get_knight_moves(pos, color)
+		"bishop": return _get_sliding_moves(pos, color, [[1,1],[1,-1],[-1,1],[-1,-1]])
+		"queen":  return _get_sliding_moves(pos, color, [[1,0],[-1,0],[0,1],[0,-1],[1,1],[1,-1],[-1,1],[-1,-1]])
+		"king":   return _get_king_moves(pos, color)
+	return []
+
+func _is_in_bounds(pos: Vector2i) -> bool:
+	return pos.x >= 0 and pos.x < BOARD_SIZE and pos.y >= 0 and pos.y < BOARD_SIZE
+
+func _can_move_to(pos: Vector2i, color: String) -> bool:
+	if not _is_in_bounds(pos):
+		return false
+	var target = _get_piece_at(pos)
+	return target == null or target.piece_color != color
+
+func _get_pawn_moves(pos: Vector2i, color: String) -> Array[Vector2i]:
+	var moves: Array[Vector2i] = []
+	var direction = -1 if color == "white" else 1
+	var piece = pieces.get(pos)
+	var has_moved = piece.get_meta("has_moved", false) if piece else false
 	
-	# TODO: Implement real chess move logic
-	# For now, highlight adjacent squares as placeholder
-	var directions = [
-		Vector2i(1, 0), Vector2i(-1, 0),
-		Vector2i(0, 1), Vector2i(0, -1)
-	]
+	var forward = pos + Vector2i(0, direction)
+	if _is_in_bounds(forward) and _get_piece_at(forward) == null:
+		moves.append(forward)
+		if not has_moved:
+			var double = pos + Vector2i(0, direction * 2)
+			if _is_in_bounds(double) and _get_piece_at(double) == null:
+				moves.append(double)
 	
+	for dx in [-1, 1]:
+		var diag = pos + Vector2i(dx, direction)
+		if _is_in_bounds(diag):
+			var target = _get_piece_at(diag)
+			if target != null and target.piece_color != color:
+				moves.append(diag)
+	return moves
+
+func _get_knight_moves(pos: Vector2i, color: String) -> Array[Vector2i]:
+	var moves: Array[Vector2i] = []
+	for offset in [Vector2i(2,1),Vector2i(2,-1),Vector2i(-2,1),Vector2i(-2,-1),
+				   Vector2i(1,2),Vector2i(1,-2),Vector2i(-1,2),Vector2i(-1,-2)]:
+		var new_pos = pos + offset
+		if _can_move_to(new_pos, color):
+			moves.append(new_pos)
+	return moves
+
+func _get_king_moves(pos: Vector2i, color: String) -> Array[Vector2i]:
+	var moves: Array[Vector2i] = []
+	for dx in [-1, 0, 1]:
+		for dy in [-1, 0, 1]:
+			if dx == 0 and dy == 0:
+				continue
+			var new_pos = pos + Vector2i(dx, dy)
+			if _can_move_to(new_pos, color):
+				moves.append(new_pos)
+	return moves
+
+func _get_sliding_moves(pos: Vector2i, color: String, directions: Array) -> Array[Vector2i]:
+	var moves: Array[Vector2i] = []
 	for dir in directions:
-		var check_pos = pos + dir
-		if check_pos.x >= 0 and check_pos.x < BOARD_SIZE and \
-		   check_pos.y >= 0 and check_pos.y < BOARD_SIZE:
-			var sq = _get_square_at(check_pos)
-			if sq:
-				sq.modulate = COLOR_VALID_MOVE
-				highlighted_squares.append(sq)
+		var current = pos + Vector2i(dir[0], dir[1])
+		while _is_in_bounds(current):
+			var target = _get_piece_at(current)
+			if target == null:
+				moves.append(current)
+			elif target.piece_color != color:
+				moves.append(current)
+				break
+			else:
+				break
+			current += Vector2i(dir[0], dir[1])
+	return moves
